@@ -2,88 +2,86 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.set_page_config(page_title="Buscador de Películas Chinguis", layout="wide")
-
 # Cargar datos
 df = pd.read_excel("peliculas_series.xlsx")
 
-# Renombrar columnas para trabajar sin errores
+# Normalizar nombres de columnas
 df.columns = df.columns.str.strip()
 
-# Opciones únicas
-generos = sorted(df["Género"].dropna().unique())
-plataformas = sorted(df["Plataforma"].dropna().unique())
-ordenables = ["Nombre", "Duración", "Rating", "Año"]
+# Eliminar columnas finales
+df = df.drop(columns=["¿La vio ella?", "¿La vi yo?"], errors="ignore")
 
-# Sidebar de filtros
-with st.sidebar:
-    st.markdown("### 🎬 Filtros")
-
-    genero_selec = st.multiselect("Género", generos)
-    plataforma_selec = st.multiselect("Plataforma", plataformas)
-
-    año_min = int(df["Año"].min())
-    año_max = int(df["Año"].max())
-    año_rango = st.slider("Año", año_min, año_max, (año_min, año_max))
-
-    excluir_mugui = st.checkbox("❌ Excluir vistas por Mugui")
-    excluir_punti = st.checkbox("❌ Excluir vistas por Punti")
-
-    orden_col = st.selectbox("Ordenar por", ordenables)
-    orden_asc = st.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
-
+# Título
 st.markdown("<h1 style='text-align: center;'>🎬 Buscador de Películas Chinguis</h1>", unsafe_allow_html=True)
+
+# Sidebar para filtros
+st.sidebar.markdown("## 🎯 Filtros")
+
+generos = df['Género'].dropna().unique()
+plataformas = df['Plataforma'].dropna().unique()
+año_min, año_max = int(df['Año'].min()), int(df['Año'].max())
+
+genero_seleccionado = st.sidebar.multiselect("Género", sorted(generos))
+plataforma_seleccionada = st.sidebar.multiselect("Plataforma", sorted(plataformas))
+rango_anio = st.sidebar.slider("Año", min_value=año_min, max_value=año_max, value=(año_min, año_max))
+
+# Filtros por vistos
+excluir_mugui = st.sidebar.checkbox("❌ Excluir vistas por Mugui")
+excluir_punti = st.sidebar.checkbox("❌ Excluir vistas por Punti")
+
+# Ordenamiento
+orden_col = st.sidebar.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
+orden_asc = st.sidebar.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
 # Aplicar filtros
 df_filtrado = df.copy()
 
-if genero_selec:
-    df_filtrado = df_filtrado[df_filtrado["Género"].isin(genero_selec)]
+if genero_seleccionado:
+    df_filtrado = df_filtrado[df_filtrado['Género'].isin(genero_seleccionado)]
 
-if plataforma_selec:
-    df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(plataforma_selec)]
+if plataforma_seleccionada:
+    df_filtrado = df_filtrado[df_filtrado['Plataforma'].isin(plataforma_seleccionada)]
 
-df_filtrado = df_filtrado[df_filtrado["Año"].between(año_rango[0], año_rango[1])]
+df_filtrado = df_filtrado[df_filtrado['Año'].between(rango_anio[0], rango_anio[1])]
 
-if excluir_mugui and "¿Mugui?" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] != True]
+if excluir_mugui:
+    df_filtrado = df_filtrado[df_filtrado['¿Mugui?'] != True]
 
-if excluir_punti and "¿Punti?" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
+if excluir_punti:
+    df_filtrado = df_filtrado[df_filtrado['¿Punti?'] != True]
 
-# Ordenar si la columna es válida y no está vacía
+# Ordenar si la columna existe
 if orden_col in df_filtrado.columns:
     df_filtrado = df_filtrado.dropna(subset=[orden_col])
     df_filtrado = df_filtrado.sort_values(by=orden_col, ascending=orden_asc)
-else:
-    st.warning(f"La columna '{orden_col}' no se encontró en los datos.")
 
-# Mostrar botón para obtener película al azar
-st.subheader("🎲 Sugerencia aleatoria")
-if st.button("Dame una película al azar"):
-    if not df_filtrado.empty:
-        peli = df_filtrado.sample(1).iloc[0]
-        st.markdown(f"""
-        **🎬 {peli['Nombre']}**  
-        📅 Año: {peli['Año']}  
-        ⏱️ Duración: {peli['Duración']} min  
-        ⭐ Rating: {peli['Rating']}  
-        📺 Plataforma: {peli['Plataforma']}
-        """)
-    else:
-        st.info("No hay películas que cumplan con esos filtros.")
-
-# Mostrar tabla editable y centrada
-st.markdown("### 🎞️ Lista de Películas Filtradas")
-cols = [col for col in df_filtrado.columns if col not in ["la vi yo", "la vio ella"]]
-
-edited_df = st.data_editor(
-    df_filtrado[cols],
+# Editar columnas ¿Mugui? y ¿Punti?
+df_filtrado.reset_index(drop=True, inplace=True)
+df_editable = df_filtrado.copy()
+df_editable[['¿Mugui?', '¿Punti?']] = df_editable[['¿Mugui?', '¿Punti?']].astype(bool)
+editado = st.data_editor(
+    df_editable,
     use_container_width=True,
+    hide_index=True,
     column_config={
         "¿Mugui?": st.column_config.CheckboxColumn("¿Mugui?"),
         "¿Punti?": st.column_config.CheckboxColumn("¿Punti?")
-    },
-    num_rows="dynamic",
-    hide_index=True
+    }
 )
+
+# Película al azar
+if not df_filtrado.empty:
+    if st.button("🎲 Mostrar una película al azar"):
+        pelicula_azar = df_filtrado.sample(1).iloc[0]
+        st.markdown("### 🍿 Película sugerida:")
+        st.markdown(f"**🎬 Nombre:** {pelicula_azar['Nombre']}")
+        st.markdown(f"📆 **Año:** {pelicula_azar['Año']}")
+        st.markdown(f"⏱️ **Duración:** {pelicula_azar['Duración']}")
+        st.markdown(f"⭐ **Rating:** {pelicula_azar['Rating']}")
+        st.markdown(f"📺 **Plataforma:** {pelicula_azar['Plataforma']}")
+else:
+    st.warning("No hay películas que coincidan con los filtros.")
+
+# Mostrar tabla
+st.markdown("### 📋 Películas filtradas:")
+st.dataframe(df_filtrado, use_container_width=True)
