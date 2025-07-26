@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import random
-import os
 
-# Cargar los datos
+# Cargar datos
 @st.cache_data
 def cargar_datos():
     df = pd.read_excel("peliculas_series.xlsx")
@@ -11,18 +10,23 @@ def cargar_datos():
     df["¿Punti?"] = df["¿Punti?"].fillna(False).astype(bool)
     return df
 
-df = cargar_datos()
+# Guardar cambios
+def guardar_datos(df):
+    df.to_excel("peliculas_series.xlsx", index=False)
 
-# Sidebar con filtros
+# Datos originales
+df_original = cargar_datos()
+
+# Sidebar
 st.sidebar.markdown("## 🎬 Filtros")
-generos = df["Género"].dropna().unique()
-plataformas = df["Plataforma"].dropna().unique()
-años_min = int(df["Año"].min())
-años_max = int(df["Año"].max())
+generos = df_original["Género"].dropna().unique()
+plataformas = df_original["Plataforma"].dropna().unique()
+años_min = int(df_original["Año"].min())
+años_max = int(df_original["Año"].max())
 
 genero_sel = st.sidebar.multiselect("Género", generos)
 plataforma_sel = st.sidebar.multiselect("Plataforma", plataformas)
-año_sel = st.sidebar.slider("Año", min_value=años_min, max_value=años_max, value=(años_min, años_max))
+año_sel = st.sidebar.slider("Año", años_min, años_max, (años_min, años_max))
 excluir_mugui = st.sidebar.checkbox("❌ Excluir vistas por Mugui")
 excluir_punti = st.sidebar.checkbox("❌ Excluir vistas por Punti")
 
@@ -30,19 +34,47 @@ orden_col = st.sidebar.selectbox("Ordenar por", ["Nombre", "Año", "Duración", 
 orden_asc = st.sidebar.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
 # Aplicar filtros
-df_filtrado = df.copy()
-
+df_filtrado = df_original.copy()
 if genero_sel:
     df_filtrado = df_filtrado[df_filtrado["Género"].isin(genero_sel)]
-
 if plataforma_sel:
     df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(plataforma_sel)]
-
 df_filtrado = df_filtrado[df_filtrado["Año"].between(año_sel[0], año_sel[1])]
 
+# Editor de columnas editables
+st.markdown("### 🎞️ Buscador de Películas Chinguis")
+
+editable_cols = ["¿Mugui?", "¿Punti?"]
+otros_cols = [col for col in df_filtrado.columns if col not in editable_cols]
+
+# Editor (sin mostrar mensajes)
+edited = st.data_editor(
+    df_filtrado,
+    column_config={
+        "¿Mugui?": st.column_config.CheckboxColumn("¿Mugui?"),
+        "¿Punti?": st.column_config.CheckboxColumn("¿Punti?")
+    },
+    disabled=otros_cols,
+    use_container_width=True,
+    hide_index=True
+)
+
+# Verificar y guardar si hay cambios en columnas editables
+for col in editable_cols:
+    if not edited[col].equals(df_filtrado[col]):
+        df_original.update(edited[["Nombre", col]])
+        guardar_datos(df_original)
+        break  # Guarda una vez y sale
+
+# Aplicar filtro nuevamente después de posibles cambios
+df_filtrado = df_original.copy()
+if genero_sel:
+    df_filtrado = df_filtrado[df_filtrado["Género"].isin(genero_sel)]
+if plataforma_sel:
+    df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(plataforma_sel)]
+df_filtrado = df_filtrado[df_filtrado["Año"].between(año_sel[0], año_sel[1])]
 if excluir_mugui:
     df_filtrado = df_filtrado[~df_filtrado["¿Mugui?"]]
-
 if excluir_punti:
     df_filtrado = df_filtrado[~df_filtrado["¿Punti?"]]
 
@@ -50,30 +82,10 @@ if excluir_punti:
 if orden_col in df_filtrado.columns:
     try:
         df_filtrado = df_filtrado.sort_values(by=orden_col, ascending=orden_asc)
-    except Exception as e:
-        st.warning(f"No se pudo ordenar por '{orden_col}': {e}")
+    except Exception:
+        pass  # No mostrar nada
 
-# Mostrar tabla editable SOLO columnas de check
-st.markdown("### 🎞️ Buscador de Películas Chinguis")
-
-edited_df = st.data_editor(
-    df_filtrado,
-    column_config={
-        "¿Mugui?": st.column_config.CheckboxColumn("¿Mugui?"),
-        "¿Punti?": st.column_config.CheckboxColumn("¿Punti?")
-    },
-    disabled=[col for col in df_filtrado.columns if col not in ["¿Mugui?", "¿Punti?"]],
-    use_container_width=True,
-    hide_index=True
-)
-
-# Guardar cambios en archivo original si hay edición
-if not edited_df.equals(df_filtrado):
-    df.update(edited_df)
-    df.to_excel("peliculas_series.xlsx", index=False)
-    st.success("✅ Cambios guardados en el archivo.")
-
-# Mostrar una película aleatoria filtrada
+# Mostrar botón de película aleatoria
 if not df_filtrado.empty:
     if st.button("🍿 Mostrar una película al azar"):
         peli = df_filtrado.sample(1).iloc[0]
@@ -83,5 +95,3 @@ if not df_filtrado.empty:
         st.markdown(f"⏱️ **Duración:** {peli['Duración']} min")
         st.markdown(f"⭐ **Rating:** {peli['Rating']}")
         st.markdown(f"📺 **Plataforma:** {peli['Plataforma']}")
-else:
-    st.info("No hay películas que cumplan con los filtros.")
