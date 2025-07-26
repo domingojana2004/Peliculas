@@ -59,6 +59,12 @@ with col2:
 # Película al azar
 if st.button("🍿 Mostrar una película al azar"):
     if not df_filtrado.empty:
-        pelicula_azar = df_filtrado.sample(1).iloc[0]
+        pelicula = df_filtrado.sample(1).iloc[0]
         st.markdown("### 🍿 Película sugerida:")
-        st.markdown(f"🎬 **Nombre:** {pelicula
+        st.markdown(f"🎬 **Nombre:** {pelicula['Nombre']}")
+        st.markdown(f"📅 **Año:** {int(pelicula['Año'])}")
+        st.markdown(f"⏱️ **Duración:** {int(pelicula['Duración'])} min")
+        st.markdown(f"⭐ **Rating:** {pelicula['Rating']}")
+        st.markdown(f"📺 **Plataforma:** {pelicula['Plataforma']}")
+    else:
+        st.warning("No hay películas que cumplan los filtros.")
