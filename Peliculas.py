@@ -1,10 +1,8 @@
 import streamlit as st
 import pandas as pd
 
-# Cargar los datos
+# Cargar datos
 df = pd.read_excel("peliculas_series.xlsx")
-
-# Normalizar nombres de columnas
 df.columns = df.columns.str.strip()
 
 # Eliminar columnas que no se usarán
@@ -15,8 +13,6 @@ st.markdown("<h1 style='text-align: center;'>🎬 Buscador de Películas Chingui
 
 # Sidebar
 st.sidebar.markdown("## 🎯 Filtros")
-
-# Filtros únicos
 generos = df["Género"].dropna().unique()
 plataformas = df["Plataforma"].dropna().unique()
 año_min, año_max = int(df["Año"].min()), int(df["Año"].max())
@@ -28,7 +24,6 @@ año_filtro = st.sidebar.slider("Año", min_value=año_min, max_value=año_max, 
 excluir_mugui = st.sidebar.checkbox("❌ Excluir vistas por Mugui")
 excluir_punti = st.sidebar.checkbox("❌ Excluir vistas por Punti")
 
-# Ordenamiento
 orden_col = st.sidebar.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
 orden_asc = st.sidebar.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
@@ -49,15 +44,16 @@ if excluir_mugui:
 if excluir_punti:
     df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
 
-# Evitar errores si hay columnas vacías
-if orden_col in df_filtrado.columns:
-    df_filtrado = df_filtrado.dropna(subset=[orden_col])
-    try:
+# Ordenamiento seguro
+try:
+    if orden_col in df_filtrado.columns:
+        df_filtrado = df_filtrado.dropna(subset=[orden_col])
+        df_filtrado[orden_col] = df_filtrado[orden_col].astype(str) if orden_col == "Nombre" else df_filtrado[orden_col]
         df_filtrado = df_filtrado.sort_values(by=orden_col, ascending=orden_asc)
-    except Exception as e:
-        st.warning(f"No se pudo ordenar por '{orden_col}': {e}")
+except Exception:
+    pass  # Silenciar el error sin mostrar advertencias
 
-# Mostrar tabla editable
+# Mostrar tabla editable solo en columnas de checkboxes
 df_filtrado.reset_index(drop=True, inplace=True)
 df_editable = df_filtrado.copy()
 df_editable[["¿Mugui?", "¿Punti?"]] = df_editable[["¿Mugui?", "¿Punti?"]].astype(bool)
@@ -66,6 +62,7 @@ editado = st.data_editor(
     df_editable,
     use_container_width=True,
     hide_index=True,
+    disabled=df_editable.columns.difference(["¿Mugui?", "¿Punti?"]).tolist(),  # bloquear todas menos esas 2
     column_config={
         "¿Mugui?": st.column_config.CheckboxColumn("¿Mugui?"),
         "¿Punti?": st.column_config.CheckboxColumn("¿Punti?")
@@ -83,7 +80,3 @@ if not df_filtrado.empty and st.button("🎲 Mostrar una película al azar"):
     st.markdown(f"📺 **Plataforma:** {peli['Plataforma']}")
 elif df_filtrado.empty:
     st.warning("⚠️ No hay películas con los filtros actuales.")
-
-# Mostrar tabla final
-st.markdown("### 📋 Películas filtradas:")
-st.dataframe(df_filtrado, use_container_width=True)
