@@ -1,93 +1,92 @@
 import streamlit as st
 import pandas as pd
 
+# Configurar diseño
+st.set_page_config(layout="wide")
+st.markdown("<h1 style='text-align: center;'>🎬 Buscador de Películas Chinguis</h1>", unsafe_allow_html=True)
+
 # Cargar datos
 df = pd.read_excel("peliculas_series.xlsx")
 
-# Eliminar columnas sin nombre
+# Limpiar columnas no útiles
 df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
 df = df.dropna(subset=["Nombre"])
-
-# Normalizar nombres
 df.columns = df.columns.str.strip()
 
-# Eliminar columnas no deseadas
-df = df.drop(columns=["¿La vimos?", "Saga"], errors="ignore")
+# Asegurar que Mugui y Punti estén como booleanos
+for col in ["¿Mugui?", "¿Punti?"]:
+    if col not in df.columns:
+        df[col] = False
+    df[col] = df[col].fillna(False).astype(bool)
 
-# Configuración de la página
-st.set_page_config(layout="wide")
-st.markdown("<h1 style='text-align: center;'>🎥 Buscador de Películas Chinguis</h1>", unsafe_allow_html=True)
-
-# Filtros en la barra lateral
+# Filtros
 with st.sidebar:
     st.header("🎯 Filtros")
 
     # Género
-    if "Género" in df.columns:
-        generos = df["Género"].dropna().unique()
-        filtro_genero = st.multiselect("Género", options=generos)
-    else:
-        filtro_genero = []
+    generos = df["Género"].dropna().unique()
+    genero_sel = st.multiselect("Género", options=generos)
 
     # Plataforma
-    if "Plataforma" in df.columns:
-        plataformas = df["Plataforma"].dropna().unique()
-        filtro_plataforma = st.multiselect("Plataforma", options=plataformas)
-    else:
-        filtro_plataforma = []
+    plataformas = df["Plataforma"].dropna().unique()
+    plataforma_sel = st.multiselect("Plataforma", options=plataformas)
 
     # Año
-    if "Año" in df.columns:
-        año_min = int(df["Año"].min())
-        año_max = int(df["Año"].max())
-        año_sel = st.slider("Año", min_value=año_min, max_value=año_max, value=(año_min, año_max))
-    else:
-        año_sel = (1900, 2100)
+    año_min = int(df["Año"].min())
+    año_max = int(df["Año"].max())
+    año_sel = st.slider("Año", min_value=año_min, max_value=año_max, value=(año_min, año_max))
 
-    # Exclusión por visto
-    excl_mugui = st.checkbox("❌ Excluir películas que vio Mugui")
-    excl_punti = st.checkbox("❌ Excluir películas que vio Punti")
+    # Exclusión
+    excl_mugui = st.checkbox("❌ Excluir vistas por Mugui")
+    excl_punti = st.checkbox("❌ Excluir vistas por Punti")
 
-    # Ordenamiento
-    orden_col = st.selectbox("Ordenar por", ["Año", "Duración", "Rating"])
-    orden_asc = st.radio("Dirección del orden", ["Ascendente", "Descendente"]) == "Ascendente"
+    # Orden
+    orden_col = st.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
+    orden_asc = st.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
 # Aplicar filtros
 df_filtrado = df.copy()
 
-if filtro_genero:
-    df_filtrado = df_filtrado[df_filtrado["Género"].isin(filtro_genero)]
+if genero_sel:
+    df_filtrado = df_filtrado[df_filtrado["Género"].isin(genero_sel)]
 
-if filtro_plataforma:
-    df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(filtro_plataforma)]
+if plataforma_sel:
+    df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(plataforma_sel)]
 
-if "Año" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["Año"].between(año_sel[0], año_sel[1])]
+df_filtrado = df_filtrado[df_filtrado["Año"].between(año_sel[0], año_sel[1])]
 
-# Corrección del filtro por películas vistas
-if excl_mugui and "¿Mugui?" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"].astype(str).str.lower() != "sí"]
+if excl_mugui:
+    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] == False]
 
-if excl_punti and "¿Punti?" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["¿Punti?"].astype(str).str.lower() != "sí"]
+if excl_punti:
+    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] == False]
 
 # Ordenar
 df_filtrado = df_filtrado.sort_values(by=orden_col, ascending=orden_asc)
 
-# Mostrar tabla centrada
-st.markdown("<div style='display: flex; justify-content: center;'>", unsafe_allow_html=True)
-st.dataframe(df_filtrado.reset_index(drop=True), use_container_width=True)
-st.markdown("</div>", unsafe_allow_html=True)
+# Editor de tabla
+st.subheader("📋 Lista de películas (puedes editar quién las vio)")
+editable = st.data_editor(
+    df_filtrado,
+    use_container_width=True,
+    column_config={
+        "¿Mugui?": st.column_config.CheckboxColumn("¿Mugui?"),
+        "¿Punti?": st.column_config.CheckboxColumn("¿Punti?")
+    },
+    disabled=["Nombre", "Año", "Duración", "Género", "Plataforma", "Rating"],
+    num_rows="dynamic"
+)
 
-# Botón película al azar
-if st.button("🎲 Sugerir una película al azar de las filtradas"):
-    if not df_filtrado.empty:
-        p = df_filtrado.sample(1).iloc[0]
+# Película al azar
+if st.button("🎲 Sugerir una película al azar"):
+    if not editable.empty:
+        peli = editable.sample(1).iloc[0]
         st.markdown("### 🎲 Película sugerida:")
-        st.markdown(f"**🎞️ Nombre:** {p['Nombre']}")
-        st.markdown(f"**📅 Año:** {p['Año']}")
-        st.markdown(f"**🕒 Duración:** {p['Duración']} min")
-        st.markdown(f"**⭐ Rating:** {p['Rating']}")
-        st.markdown(f"**📺 Plataforma:** {p['Plataforma']}")
+        st.markdown(f"**🎞️ Nombre:** {peli['Nombre']}")
+        st.markdown(f"**📅 Año:** {peli['Año']}")
+        st.markdown(f"**🕒 Duración:** {peli['Duración']} min")
+        st.markdown(f"**⭐ Rating:** {peli['Rating']}")
+        st.markdown(f"**📺 Plataforma:** {peli['Plataforma']}")
     else:
-        st.warning("No hay películas disponibles con los filtros seleccionados.")
+        st.warning("No hay películas con esos filtros.")
+
