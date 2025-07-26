@@ -1,35 +1,38 @@
 import streamlit as st
 import pandas as pd
+import random
 
 # Cargar datos
 df = pd.read_excel("peliculas_series.xlsx")
 
-# Eliminar columnas "La vi yo" y "La vio ella" si existen
-df = df.drop(columns=["La vi yo", "La vio ella"], errors="ignore")
+# Eliminar columnas no deseadas
+df = df.drop(columns=["¿La vimos?", "Saga"], errors="ignore")
 
 # Título
 st.title("🎬 Buscador de Películas Chinguis")
 
-# Filtros de género
+# Filtros
+st.subheader("🎯 Filtros")
+
+# Filtro por género
 generos = df["Género"].dropna().unique()
-filtro_genero = st.multiselect("Filtrar por género", generos)
+filtro_genero = st.multiselect("Filtrar por género", options=generos)
 
-# Filtros de plataforma
-plataformas = df["Plataformas"].dropna().unique()
-filtro_plataforma = st.multiselect("Filtrar por plataforma", plataformas)
+# Filtro por plataforma
+plataformas = df["Plataforma"].dropna().unique()
+filtro_plataforma = st.multiselect("Filtrar por plataforma", options=plataformas)
 
-# Rango de año
+# Filtro por año
 min_anio = int(df["Año"].min())
 max_anio = int(df["Año"].max())
-rango_anio = st.slider("Filtrar por año", min_anio, max_anio, (min_anio, max_anio))
+rango_anio = st.slider("Filtrar por año", min_value=min_anio, max_value=max_anio, value=(min_anio, max_anio))
 
-# Filtro: excluir películas vistas por Mugui y/o Punti
-excluir_mugui = st.checkbox("Excluir películas vistas por Mugui")
-excluir_punti = st.checkbox("Excluir películas vistas por Punti")
+# Excluir películas vistas por Mugui o Punti
+excluir_mugui = st.checkbox("Excluir películas que vio Mugui")
+excluir_punti = st.checkbox("Excluir películas que vio Punti")
 
-# Ordenar por columna
-ordenar_por = st.selectbox("Ordenar por:", ["Año", "Duración", "Rating"])
-orden_asc = st.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
+# Orden
+orden_opcion = st.selectbox("Ordenar por", ["Año", "Duración", "Rating"])
 
 # Aplicar filtros
 df_filtrado = df.copy()
@@ -38,23 +41,27 @@ if filtro_genero:
     df_filtrado = df_filtrado[df_filtrado["Género"].isin(filtro_genero)]
 
 if filtro_plataforma:
-    df_filtrado = df_filtrado[df_filtrado["Plataformas"].isin(filtro_plataforma)]
+    df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(filtro_plataforma)]
 
-df_filtrado = df_filtrado[(df_filtrado["Año"] >= rango_anio[0]) & (df_filtrado["Año"] <= rango_anio[1])]
+df_filtrado = df_filtrado[df_filtrado["Año"].between(rango_anio[0], rango_anio[1])]
 
-if excluir_mugui and "Mugui" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["Mugui"] != "Sí"]
+if excluir_mugui:
+    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] != "Sí"]
 
-if excluir_punti and "Punti" in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado["Punti"] != "Sí"]
+if excluir_punti:
+    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != "Sí"]
 
 # Ordenar
-df_filtrado = df_filtrado.sort_values(by=ordenar_por, ascending=orden_asc)
+df_filtrado = df_filtrado.sort_values(by=orden_opcion)
 
-# Mostrar tabla
+# Mostrar resultados
+st.subheader("🎥 Películas encontradas")
 st.dataframe(df_filtrado.reset_index(drop=True))
 
-# Botón para guardar cambios
-if st.button("💾 Guardar cambios"):
-    df_editado.to_excel(archivo_guardado, index=False)
-    st.success(f"¡Cambios guardados en {archivo_guardado}!")
+# Película al azar
+if st.button("🎲 Sugerir una película al azar"):
+    if not df_filtrado.empty:
+        seleccion = df_filtrado.sample(1).iloc[0]
+        st.success(f"🎞️ **{seleccion['Nombre']}**\n\n📅 Año: {seleccion['Año']}\n🕒 Duración: {seleccion['Duración']} min\n⭐ Rating: {seleccion['Rating']}\n📺 Plataforma: {seleccion['Plataforma']}")
+    else:
+        st.warning("No hay películas disponibles con los filtros seleccionados.")
