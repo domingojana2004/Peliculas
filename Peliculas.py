@@ -1,78 +1,90 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import random
 
-st.set_page_config(layout="wide")
+# --- Configuración inicial ---
+st.set_page_config(page_title="Buscador de Películas Chinguis", layout="wide")
 
-# Cargar datos
-file_path = "peliculas_series.xlsx"
-df = pd.read_excel(file_path)
+# --- Cargar datos ---
+df = pd.read_excel("peliculas_series.xlsx")
 
-# Convertir columnas booleanas
-df["¿Mugui?"] = df["¿Mugui?"].astype(bool)
-df["¿Punti?"] = df["¿Punti?"].astype(bool)
+# --- Limpiar nombres de columnas por seguridad ---
+df.columns = df.columns.str.strip()
 
-# Filtros
+# --- Convertir columnas necesarias a numéricas ---
+for col in ["Año", "Duración", "Rating"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# --- Sidebar con filtros ---
 with st.sidebar:
     st.markdown("## 🎬 Filtros")
-    generos = st.multiselect("Género", options=sorted(df["Género"].dropna().unique()))
-    plataformas = st.multiselect("Plataforma", options=sorted(df["Plataforma"].dropna().unique()))
-    min_year = int(df["Año"].min())
-    max_year = int(df["Año"].max())
-    year_range = st.slider("Año", min_year, max_year, (min_year, max_year))
+    
+    generos = df["Género"].dropna().unique()
+    genero_sel = st.multiselect("Género", generos)
+
+    plataformas = sorted({p.strip() for v in df["Plataforma"].dropna() for p in str(v).split(";")})
+    plataforma_sel = st.multiselect("Plataforma", plataformas)
+
+    min_anio, max_anio = int(df["Año"].min()), int(df["Año"].max())
+    anio_rango = st.slider("Año", min_anio, max_anio, (min_anio, max_anio))
+
     excluir_mugui = st.checkbox("❌ Excluir vistas por Mugui")
     excluir_punti = st.checkbox("❌ Excluir vistas por Punti")
+
     orden_columna = st.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
     ascendente = st.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
-# Aplicar filtros
+# --- Aplicar filtros ---
 df_filtrado = df.copy()
-if generos:
-    df_filtrado = df_filtrado[df_filtrado["Género"].isin(generos)]
-if plataformas:
-    df_filtrado = df_filtrado[df_filtrado["Plataforma"].str.contains('|'.join(plataformas), na=False)]
-df_filtrado = df_filtrado[(df_filtrado["Año"] >= year_range[0]) & (df_filtrado["Año"] <= year_range[1])]
+
+if genero_sel:
+    df_filtrado = df_filtrado[df_filtrado["Género"].isin(genero_sel)]
+
+if plataforma_sel:
+    df_filtrado = df_filtrado[df_filtrado["Plataforma"].fillna("").apply(lambda x: any(p in x for p in plataforma_sel))]
+
+df_filtrado = df_filtrado[(df_filtrado["Año"] >= anio_rango[0]) & (df_filtrado["Año"] <= anio_rango[1])]
+
 if excluir_mugui:
-    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] == False]
+    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] != True]
+
 if excluir_punti:
-    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] == False]
+    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
 
-# Ordenar
-df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
+# --- Ordenar sin error ---
+if orden_columna in df_filtrado.columns:
+    df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
 
-# Mostrar tabla editable
+# --- Título de la app ---
 st.markdown("## 🎥 Buscador de Películas Chinguis")
 
+# --- Tabla editable ---
 gb = GridOptionsBuilder.from_dataframe(df_filtrado)
-gb.configure_column("¿Mugui?", editable=True)
-gb.configure_column("¿Punti?", editable=True)
-gb.configure_grid_options(domLayout='normal')
+gb.configure_column("¿Mugui?", editable=True, checkbox=True)
+gb.configure_column("¿Punti?", editable=True, checkbox=True)
+grid_options = gb.build()
+
 grid_response = AgGrid(
     df_filtrado,
-    gridOptions=gb.build(),
-    update_mode=GridUpdateMode.MODEL_CHANGED,
-    fit_columns_on_grid_load=True,
-    allow_unsafe_jscode=True,
-    height=480
+    gridOptions=grid_options,
+    update_mode=GridUpdateMode.MANUAL,
+    height=500,
+    fit_columns_on_grid_load=True
 )
 
-# Guardar cambios
-df_actualizado = grid_response["data"]
-df.update(df_actualizado.set_index("Nombre"), overwrite=True)
-df.to_excel(file_path, index=False)
-
-# Mostrar película aleatoria
+# --- Mostrar película aleatoria ---
 if st.button("🍿 Mostrar una película al azar"):
     if not df_filtrado.empty:
-        pelicula = df_filtrado.sample(1).iloc[0]
+        peli = df_filtrado.sample(1).iloc[0]
         st.markdown(
             f"""
-            **🎞️ Nombre:** {pelicula['Nombre']}  
-            **📆 Año:** {pelicula['Año']}  
-            **⏱️ Duración:** {pelicula['Duración']} minutos  
-            **⭐ Rating:** {pelicula['Rating']}  
-            **📺 Plataforma:** {pelicula['Plataforma']}
+            ### 🎬 **Nombre:** {peli['Nombre']}
+            - **Duración:** {peli['Duración']} min  
+            - **Rating:** {peli['Rating']}  
+            - **Año:** {peli['Año']}  
+            - **Plataforma:** {peli['Plataforma']}
             """
         )
-
+    else:
+        st.warning("No hay películas que coincidan con los filtros.")
