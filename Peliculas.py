@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import random
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+
 
 # Configuración de la página
 st.set_page_config(layout="wide")
@@ -68,3 +70,28 @@ if st.button("🍿 Mostrar una película al azar"):
         st.markdown(f"📺 **Plataforma:** {pelicula['Plataforma']}")
     else:
         st.warning("No hay películas que cumplan los filtros.")
+# Configurar tabla editable solo para columnas de check
+gb = GridOptionsBuilder.from_dataframe(df_filtrado)
+gb.configure_column("¿Mugui?", editable=True)
+gb.configure_column("¿Punti?", editable=True)
+gb.configure_column("¿La vimos?", editable=True)
+gb.configure_grid_options(domLayout='normal')
+grid_options = gb.build()
+
+# Mostrar tabla editable
+grid_response = AgGrid(
+    df_filtrado,
+    gridOptions=grid_options,
+    update_mode=GridUpdateMode.MANUAL,
+    fit_columns_on_grid_load=True,
+    height=400,
+    editable=True
+)
+
+df_editado = grid_response["data"]
+# Guardar los cambios en el archivo original
+if not df_editado.equals(df_filtrado):
+    for idx, row in df_editado.iterrows():
+        df.loc[df['Nombre'] == row['Nombre'], ['¿Mugui?', '¿Punti?', '¿La vimos?']] = row[['¿Mugui?', '¿Punti?', '¿La vimos?']]
+    df.to_excel("peliculas_series.xlsx", index=False)
+
