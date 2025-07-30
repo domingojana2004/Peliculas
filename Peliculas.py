@@ -1,13 +1,18 @@
 import streamlit as st
 import pandas as pd
-import random
 
 st.set_page_config(page_title="Buscador de Películas Chinguis", layout="wide")
 
-# Cargar el Excel
+EXCEL_FILE = "peliculas_series.xlsx"
+
+# Cargar datos
 @st.cache_data
 def cargar_datos():
-    return pd.read_excel("peliculas_series.xlsx")
+    return pd.read_excel(EXCEL_FILE)
+
+# Guardar datos
+def guardar_datos(df):
+    df.to_excel(EXCEL_FILE, index=False)
 
 df = cargar_datos()
 
@@ -28,7 +33,6 @@ rango_anos = st.sidebar.slider("Año", min_year, max_year, (min_year, max_year))
 excluir_mugui = st.sidebar.checkbox("❌ Excluir vistas por Mugui")
 excluir_punti = st.sidebar.checkbox("❌ Excluir vistas por Punti")
 
-# Ordenar
 orden_columna = st.sidebar.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
 ascendente = st.sidebar.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
@@ -51,7 +55,7 @@ if excluir_mugui:
 if excluir_punti:
     df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
 
-# --- Ordenar sin romper ---
+# Ordenar sin romper
 if orden_columna in df_filtrado.columns:
     try:
         df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
@@ -61,16 +65,23 @@ if orden_columna in df_filtrado.columns:
 # Mostrar título
 st.markdown("<h2 style='text-align: center;'>🎥 Buscador de Películas Chinguis</h2>", unsafe_allow_html=True)
 
-# Mostrar tabla editable SOLO columnas Mugui y Punti
+# --- Tabla editable ---
 edit_cols = ["¿Mugui?", "¿Punti?"]
 
-# Creamos un dataframe solo con esas columnas como editables
 df_editable = st.data_editor(
     df_filtrado,
     column_config={col: st.column_config.CheckboxColumn(default=False) for col in edit_cols},
     disabled=[col for col in df_filtrado.columns if col not in edit_cols],
-    hide_index=True
+    hide_index=True,
+    key="tabla_peliculas"
 )
+
+# Guardar automáticamente cuando se editen los ticks
+if not df_editable.equals(df_filtrado):
+    # Actualizamos el df original con los cambios
+    for idx in df_editable.index:
+        df.loc[df.index == idx, edit_cols] = df_editable.loc[idx, edit_cols].values
+    guardar_datos(df)
 
 # Botón para película al azar
 if st.button("🍿 Mostrar una película al azar"):
