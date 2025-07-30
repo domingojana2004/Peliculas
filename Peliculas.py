@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import time
 
 st.set_page_config(page_title="Buscador de Películas Chinguis", layout="wide")
 
@@ -8,16 +9,23 @@ EXCEL_FILE = "peliculas_series.xlsx"
 
 # --- Cargar datos ---
 def cargar_datos():
-    if os.path.exists(EXCEL_FILE):
+    try:
         return pd.read_excel(EXCEL_FILE)
-    else:
-        st.error(f"No se encontró el archivo {EXCEL_FILE}")
-        return pd.DataFrame()
+    except EOFError:
+        # Si está en uso, espera 0.5 segundos y reintenta
+        time.sleep(0.5)
+        return pd.read_excel(EXCEL_FILE)
 
 def guardar_datos(df):
-    df.to_excel(EXCEL_FILE, index=False)
+    # Guardar datos sin corromper el archivo
+    for _ in range(3):  # Intenta hasta 3 veces
+        try:
+            df.to_excel(EXCEL_FILE, index=False)
+            break
+        except PermissionError:
+            time.sleep(0.5)
 
-# Leemos el excel completo
+# --- Leer Excel ---
 df = cargar_datos()
 
 # --- FILTROS ---
@@ -81,7 +89,6 @@ if not df_editado.equals(df_filtrado):
     for idx in df_editado.index:
         df.loc[df.index == idx, edit_cols] = df_editado.loc[idx, edit_cols].values
 
-    # Guardar los cambios en el Excel
     guardar_datos(df)
 
 # --- BOTÓN ALEATORIO ---
