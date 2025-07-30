@@ -1,50 +1,49 @@
-import pandas as pd
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+import pandas as pd
 import random
 
-# --- Configuración inicial ---
 st.set_page_config(page_title="Buscador de Películas Chinguis", layout="wide")
 
-# --- Cargar datos ---
-df = pd.read_excel("peliculas_series.xlsx")
+# Cargar el Excel
+@st.cache_data
+def cargar_datos():
+    return pd.read_excel("peliculas_series.xlsx")
 
-# --- Limpiar nombres de columnas por seguridad ---
-df.columns = df.columns.str.strip()
+df = cargar_datos()
 
-# --- Convertir columnas necesarias a numéricas ---
-for col in ["Año", "Duración", "Rating"]:
-    df[col] = pd.to_numeric(df[col], errors="coerce")
+# Filtros en barra lateral
+st.sidebar.title("🎬 Filtros")
 
-# --- Sidebar con filtros ---
-with st.sidebar:
-    st.markdown("## 🎬 Filtros")
-    
-    generos = df["Género"].dropna().unique()
-    genero_sel = st.multiselect("Género", generos)
+generos = st.sidebar.multiselect(
+    "Género", options=df["Género"].dropna().unique()
+)
 
-    plataformas = sorted({p.strip() for v in df["Plataforma"].dropna() for p in str(v).split(";")})
-    plataforma_sel = st.multiselect("Plataforma", plataformas)
+plataformas = st.sidebar.multiselect(
+    "Plataforma", options=df["Plataforma"].dropna().unique()
+)
 
-    min_anio, max_anio = int(df["Año"].min()), int(df["Año"].max())
-    anio_rango = st.slider("Año", min_anio, max_anio, (min_anio, max_anio))
+min_year, max_year = int(df["Año"].min()), int(df["Año"].max())
+rango_anos = st.sidebar.slider("Año", min_year, max_year, (min_year, max_year))
 
-    excluir_mugui = st.checkbox("❌ Excluir vistas por Mugui")
-    excluir_punti = st.checkbox("❌ Excluir vistas por Punti")
+excluir_mugui = st.sidebar.checkbox("❌ Excluir vistas por Mugui")
+excluir_punti = st.sidebar.checkbox("❌ Excluir vistas por Punti")
 
-    orden_columna = st.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
-    ascendente = st.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
+# Ordenar
+orden_columna = st.sidebar.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
+ascendente = st.sidebar.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
-# --- Aplicar filtros ---
+# --- Filtrado ---
 df_filtrado = df.copy()
 
-if genero_sel:
-    df_filtrado = df_filtrado[df_filtrado["Género"].isin(genero_sel)]
+if generos:
+    df_filtrado = df_filtrado[df_filtrado["Género"].isin(generos)]
 
-if plataforma_sel:
-    df_filtrado = df_filtrado[df_filtrado["Plataforma"].fillna("").apply(lambda x: any(p in x for p in plataforma_sel))]
+if plataformas:
+    df_filtrado = df_filtrado[df_filtrado["Plataforma"].isin(plataformas)]
 
-df_filtrado = df_filtrado[(df_filtrado["Año"] >= anio_rango[0]) & (df_filtrado["Año"] <= anio_rango[1])]
+df_filtrado = df_filtrado[
+    (df_filtrado["Año"] >= rango_anos[0]) & (df_filtrado["Año"] <= rango_anos[1])
+]
 
 if excluir_mugui:
     df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] != True]
@@ -52,39 +51,43 @@ if excluir_mugui:
 if excluir_punti:
     df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
 
-# --- Ordenar sin error ---
+# --- Ordenar sin romper ---
 if orden_columna in df_filtrado.columns:
-    df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
+    try:
+        df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
+    except Exception as e:
+        st.warning(f"No se pudo ordenar por '{orden_columna}': {e}")
 
-# --- Título de la app ---
-st.markdown("## 🎥 Buscador de Películas Chinguis")
+# Mostrar título
+st.markdown("<h2 style='text-align: center;'>🎥 Buscador de Películas Chinguis</h2>", unsafe_allow_html=True)
 
-# --- Tabla editable ---
-gb = GridOptionsBuilder.from_dataframe(df_filtrado)
-gb.configure_column("¿Mugui?", editable=True, checkbox=True)
-gb.configure_column("¿Punti?", editable=True, checkbox=True)
-grid_options = gb.build()
+# Mostrar tabla editable SOLO columnas Mugui y Punti
+edit_cols = ["¿Mugui?", "¿Punti?"]
 
-grid_response = AgGrid(
+# Creamos un dataframe solo con esas columnas como editables
+df_editable = st.data_editor(
     df_filtrado,
-    gridOptions=grid_options,
-    update_mode=GridUpdateMode.MANUAL,
-    height=500,
-    fit_columns_on_grid_load=True
+    column_config={col: st.column_config.CheckboxColumn(default=False) for col in edit_cols},
+    disabled=[col for col in df_filtrado.columns if col not in edit_cols],
+    hide_index=True
 )
 
-# --- Mostrar película aleatoria ---
+# Botón para película al azar
 if st.button("🍿 Mostrar una película al azar"):
     if not df_filtrado.empty:
-        peli = df_filtrado.sample(1).iloc[0]
+        peli_random = df_filtrado.sample(1).iloc[0]
         st.markdown(
             f"""
-            ### 🎬 **Nombre:** {peli['Nombre']}
-            - **Duración:** {peli['Duración']} min  
-            - **Rating:** {peli['Rating']}  
-            - **Año:** {peli['Año']}  
-            - **Plataforma:** {peli['Plataforma']}
-            """
+            <div style="text-align:center; margin-top:20px;">
+                <h3>🍿 Película sugerida:</h3>
+                <p><b>🎬 Nombre:</b> {peli_random['Nombre']}</p>
+                <p><b>📅 Año:</b> {peli_random['Año']}</p>
+                <p><b>⭐ Rating:</b> {peli_random['Rating']}</p>
+                <p><b>⏱️ Duración:</b> {peli_random['Duración']} min</p>
+                <p><b>📺 Plataforma:</b> {peli_random['Plataforma']}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
         )
     else:
-        st.warning("No hay películas que coincidan con los filtros.")
+        st.warning("⚠️ No hay películas para mostrar.")
