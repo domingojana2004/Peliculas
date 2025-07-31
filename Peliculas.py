@@ -1,17 +1,20 @@
 import streamlit as st
 import pandas as pd
-import random
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Buscador de Películas Chinguis", layout="wide")
 
-# --- CARGAR DATOS ---
+# --- CARGAR Y GUARDAR DATOS ---
 EXCEL_FILE = "peliculas_series.xlsx"
 
 @st.cache_data
 def cargar_datos():
     return pd.read_excel(EXCEL_FILE)
 
+def guardar_datos(dataframe):
+    dataframe.to_excel(EXCEL_FILE, index=False)
+
+# Cargar el DataFrame completo (siempre será la base)
 df = cargar_datos()
 
 # --- SIDEBAR FILTROS ---
@@ -22,7 +25,7 @@ generos = st.sidebar.multiselect(
     "Género", options=df["Género"].dropna().unique()
 )
 
-# 🔹 Crear lista limpia de plataformas únicas (sin combinaciones con ;)
+# 🔹 Limpiar lista de plataformas para que no salgan combinadas
 plataformas_unicas = sorted(
     {p.strip() for sublist in df["Plataforma"].dropna() for p in str(sublist).split(";")}
 )
@@ -71,17 +74,16 @@ if excluir_punti:
 try:
     df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
 except Exception:
-    pass  # Si hay error de tipo, no mostrar alerta
+    pass
 
 # --- MOSTRAR TABLA ---
 st.markdown("<h1 style='text-align: center;'>🎥 Buscador de Películas Chinguis</h1>", unsafe_allow_html=True)
-
-# 🔹 Mostrar cuántas películas se encontraron
 st.markdown(f"### 🔍 Se encontraron **{len(df_filtrado)}** películas")
 
-# Solo una tabla editable: ¿Mugui? y ¿Punti?
+# Solo permitir edición de ¿Mugui? y ¿Punti?
 editable_cols = ["¿Mugui?", "¿Punti?"]
 
+# Data editor con IDs (para saber qué filas se modificaron)
 edited_df = st.data_editor(
     df_filtrado,
     use_container_width=True,
@@ -90,13 +92,18 @@ edited_df = st.data_editor(
     column_config={
         col: st.column_config.CheckboxColumn() for col in editable_cols
     },
-    disabled=[col for col in df_filtrado.columns if col not in editable_cols]
+    disabled=[col for col in df_filtrado.columns if col not in editable_cols],
+    key="editor"
 )
 
-# Guardar cambios si se modificaron casillas
+# --- GUARDAR CAMBIOS ---
 if not edited_df.equals(df_filtrado):
-    df.update(edited_df)
-    df.to_excel(EXCEL_FILE, index=False)
+    # Actualizar los valores modificados en el dataframe original
+    for idx in edited_df.index:
+        df.loc[idx, editable_cols] = edited_df.loc[idx, editable_cols]
+
+    # Guardar en Excel
+    guardar_datos(df)
 
 # --- BOTÓN PELÍCULA AL AZAR ---
 if st.button("🍿 Mostrar una película al azar"):
@@ -114,3 +121,4 @@ if st.button("🍿 Mostrar una película al azar"):
         )
     else:
         st.warning("No hay películas que coincidan con los filtros.")
+
