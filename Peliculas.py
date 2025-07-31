@@ -37,7 +37,7 @@ excluir_punti = st.sidebar.checkbox("❌ Excluir vistas por Punti")
 orden_columna = st.sidebar.selectbox("Ordenar por", ["Nombre", "Año", "Duración", "Rating"])
 ascendente = st.sidebar.radio("Orden", ["Ascendente", "Descendente"]) == "Ascendente"
 
-# --- FILTRADO ---
+# --- APLICAR FILTROS SIN EXCLUIR AÚN ---
 df_filtrado = df.copy()
 
 if generos:
@@ -54,24 +54,18 @@ df_filtrado = df_filtrado[
     (df_filtrado["Año"] >= rango_anos[0]) & (df_filtrado["Año"] <= rango_anos[1])
 ]
 
-if excluir_mugui:
-    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] != True]
-
-if excluir_punti:
-    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
-
 try:
     df_filtrado = df_filtrado.sort_values(by=orden_columna, ascending=ascendente)
 except:
     pass
 
-# --- MOSTRAR TABLA ---
+# --- MOSTRAR TABLA (EDITABLE ANTES DE EXCLUIR) ---
 st.markdown("<h1 style='text-align: center;'>🎥 Buscador de Películas Chinguis</h1>", unsafe_allow_html=True)
 st.markdown(f"### 🔍 Se encontraron **{len(df_filtrado)}** películas")
 
 editable_cols = ["¿Mugui?", "¿Punti?"]
 
-# --- TABLA EDITABLE ---
+# Tabla editable
 edited_df = st.data_editor(
     df_filtrado,
     use_container_width=True,
@@ -81,16 +75,22 @@ edited_df = st.data_editor(
     key="editor"
 )
 
-# --- GUARDADO AUTOMÁTICO ---
-# Solo guardamos los ticks cambiados en el Excel original
+# --- GUARDAR LOS CAMBIOS ANTES DE EXCLUIR ---
 for idx in edited_df.index:
-    cambios = False
     for col in editable_cols:
         if df.loc[idx, col] != edited_df.loc[idx, col]:
             df.loc[idx, col] = edited_df.loc[idx, col]
-            cambios = True
-    if cambios:
-        guardar_datos(df)
+
+guardar_datos(df)
+
+# --- APLICAR FILTRO DE EXCLUIR DESPUÉS ---
+df_filtrado = edited_df.copy()
+
+if excluir_mugui:
+    df_filtrado = df_filtrado[df_filtrado["¿Mugui?"] != True]
+
+if excluir_punti:
+    df_filtrado = df_filtrado[df_filtrado["¿Punti?"] != True]
 
 # --- BOTÓN PELÍCULA AL AZAR ---
 if st.button("🍿 Mostrar una película al azar"):
