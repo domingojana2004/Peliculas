@@ -71,7 +71,7 @@ st.markdown(f"### 🔍 Se encontraron **{len(df_filtrado)}** películas")
 
 editable_cols = ["¿Mugui?", "¿Punti?"]
 
-# Data editor para modificar Mugui y Punti
+# Data editor editable solo para columnas Mugui y Punti
 edited_df = st.data_editor(
     df_filtrado,
     use_container_width=True,
@@ -81,11 +81,12 @@ edited_df = st.data_editor(
     key="editor"
 )
 
-# --- GUARDAR CAMBIOS ---
-for idx in edited_df.index:
-    df.loc[idx, editable_cols] = edited_df.loc[idx, editable_cols]
-
-guardar_datos(df)
+# --- BOTÓN PARA GUARDAR CAMBIOS ---
+if st.button("💾 Guardar cambios"):
+    for idx in edited_df.index:
+        df.loc[idx, editable_cols] = edited_df.loc[idx, editable_cols]
+    guardar_datos(df)
+    st.success("✅ Cambios guardados correctamente.")
 
 # --- BOTÓN PELÍCULA AL AZAR ---
 if st.button("🍿 Mostrar una película al azar"):
