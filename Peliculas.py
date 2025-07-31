@@ -72,4 +72,34 @@ st.markdown(f"### 🔍 Se encontraron **{len(df_filtrado)}** películas")
 editable_cols = ["¿Mugui?", "¿Punti?"]
 
 # Data editor para modificar Mugui y Punti
-edited_df = st.data_edit
+edited_df = st.data_editor(
+    df_filtrado,
+    use_container_width=True,
+    hide_index=True,
+    column_config={col: st.column_config.CheckboxColumn() for col in editable_cols},
+    disabled=[col for col in df_filtrado.columns if col not in editable_cols],
+    key="editor"
+)
+
+# --- GUARDAR CAMBIOS ---
+for idx in edited_df.index:
+    df.loc[idx, editable_cols] = edited_df.loc[idx, editable_cols]
+
+guardar_datos(df)
+
+# --- BOTÓN PELÍCULA AL AZAR ---
+if st.button("🍿 Mostrar una película al azar"):
+    if not df_filtrado.empty:
+        pelicula = df_filtrado.sample(1).iloc[0]
+        st.markdown(
+            f"""
+            ### 🍿 Película sugerida:
+            - 🎬 **Nombre:** {pelicula['Nombre']}
+            - 📅 **Año:** {pelicula['Año']}
+            - ⏱️ **Duración:** {pelicula['Duración']} min
+            - ⭐ **Rating:** {pelicula['Rating']}
+            - 📺 **Plataforma:** {pelicula['Plataforma']}
+            """
+        )
+    else:
+        st.warning("No hay películas que coincidan con los filtros.")
