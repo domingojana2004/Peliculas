@@ -71,7 +71,7 @@ st.markdown(f"### 🔍 Se encontraron **{len(df_filtrado)}** películas")
 
 editable_cols = ["¿Mugui?", "¿Punti?"]
 
-# Data editor editable solo para columnas Mugui y Punti
+# --- TABLA EDITABLE ---
 edited_df = st.data_editor(
     df_filtrado,
     use_container_width=True,
@@ -81,12 +81,16 @@ edited_df = st.data_editor(
     key="editor"
 )
 
-# --- BOTÓN PARA GUARDAR CAMBIOS ---
-if st.button("💾 Guardar cambios"):
-    for idx in edited_df.index:
-        df.loc[idx, editable_cols] = edited_df.loc[idx, editable_cols]
-    guardar_datos(df)
-    st.success("✅ Cambios guardados correctamente.")
+# --- GUARDADO AUTOMÁTICO ---
+# Solo guardamos los ticks cambiados en el Excel original
+for idx in edited_df.index:
+    cambios = False
+    for col in editable_cols:
+        if df.loc[idx, col] != edited_df.loc[idx, col]:
+            df.loc[idx, col] = edited_df.loc[idx, col]
+            cambios = True
+    if cambios:
+        guardar_datos(df)
 
 # --- BOTÓN PELÍCULA AL AZAR ---
 if st.button("🍿 Mostrar una película al azar"):
