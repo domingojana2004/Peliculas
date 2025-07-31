@@ -76,6 +76,9 @@ except Exception:
 # --- MOSTRAR TABLA ---
 st.markdown("<h1 style='text-align: center;'>🎥 Buscador de Películas Chinguis</h1>", unsafe_allow_html=True)
 
+# 🔹 Mostrar cuántas películas se encontraron
+st.markdown(f"### 🔍 Se encontraron **{len(df_filtrado)}** películas")
+
 # Solo una tabla editable: ¿Mugui? y ¿Punti?
 editable_cols = ["¿Mugui?", "¿Punti?"]
 
